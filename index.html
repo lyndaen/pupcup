@@ -60,6 +60,9 @@ button:disabled { opacity: .6; cursor: wait; }
   <p class="err" id="err" role="alert"></p>
 </form>
 <script>
+// All in one function: document.write keeps this window, so top-level names here (like $) would clash with the
+// report's own script and stop it loading (Oct 18: the first report sat on "loading…").
+(() => {
 const $ = (id) => document.getElementById(id);
 const day = new URLSearchParams(location.search).get("d");
 const file = /^\d{4}-\d{2}-\d{2}$/.test(day || "") ? `r/${day}.json` : "latest.json";
@@ -67,7 +70,7 @@ if (file !== "latest.json") $("sub").textContent = `Shareholder report · ${new 
 const KEY = "pupcup-pass";
 const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
-async function open(pass) {
+async function unlock(pass) {
   const res = await fetch(file, { cache: "no-store" });
   if (!res.ok) throw new Error(res.status === 404 ? "That report isn't there (yet). Try again in a minute." : `Couldn't load it (HTTP ${res.status}).`);
   const s = await res.json();
@@ -83,7 +86,7 @@ async function open(pass) {
 async function attempt(pass, remember) {
   $("go").disabled = true; $("err").textContent = ""; $("go").textContent = "Opening…";
   try {
-    const html = await open(pass);
+    const html = await unlock(pass);
     try { if (remember) localStorage.setItem(KEY, pass); } catch { /* private window */ }
     document.open(); document.write(html); document.close();
   } catch (e) {
@@ -93,9 +96,13 @@ async function attempt(pass, remember) {
 }
 
 $("f").addEventListener("submit", (e) => { e.preventDefault(); attempt($("pw").value, $("keep").checked); });
+// A passphrase in the link's #k=… (never sent to the server) opens it straight away; it's then cleared from the address.
+const fromLink = new URLSearchParams(location.hash.slice(1)).get("k");
+if (fromLink) history.replaceState(null, "", location.pathname + location.search);
 let saved = null;
 try { saved = localStorage.getItem(KEY); } catch { /* private window */ }
-if (saved) attempt(saved, true);
+if (fromLink || saved) attempt(fromLink || saved, true);
+})();
 </script>
 </body>
 </html>
